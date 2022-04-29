@@ -1,0 +1,162 @@
+#include <unistd.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <assert.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+
+#include "proc-common.h"
+
+#define SLEEP_23_SEC 23
+#define SLEEP_31_SEC 30
+#define SLEEP_21_SEC 20
+#define SLEEP_13_SEC 13
+#define SLEEP_11_SEC 10
+#define SLEEP_3_SEC  3
+
+/*
+ * Create this process tree:
+ * A-+-B---D
+ *   `-C
+ */
+
+void fork_procs(void)
+{
+        /*
+         * initial process is A.
+         */
+        change_pname("A");
+        printf("A: Sleeping...\n");
+        /* ... */
+
+        /*creating A--B*/
+        pid_t pidB;
+        int statusB;
+        pidB=fork();
+        if(pidB<0) {
+                perror("main :fork");
+                exit(1);
+        }
+        if (pidB == 0){
+                change_pname("B");
+                printf("B: Sleeping...\n");
+                sleep(6);
+
+                 /*creating A--B--D*/
+                pid_t pidD;
+                int statusD;
+                pidD=fork();
+                if(pidD<0){
+                        perror("main :fork");
+                        exit(1);
+                }
+                if(pidD==0){
+                        change_pname("D");
+                        printf("D: Sleeping...\n");
+                        sleep(15);
+
+                        /* ----*/
+
+                        printf("D: Exiting...\n");
+                        exit(13);
+                }
+                sleep(3);
+
+                /* ---- */
+
+        //      show_pstree(pidD);
+                pidD=wait(&statusD);
+                explain_wait_status(pidD,statusD);
+                sleep(5);
+                printf("B: Exiting...\n");
+                exit(19);
+        }
+        sleep(6);
+
+        /*  ---- */
+
+
+        /*making A-+-C
+                   +-B--D       */
+        pid_t pidC;
+        int statusC;
+        pidC = fork();
+        if (pidC < 0) {
+                perror("main: fork");
+exit(1);
+        }
+        if (pidC == 0){
+                change_pname("C");
+                printf("C: Sleeping...\n");
+                sleep(18);
+
+                /* ... */
+
+                printf("C: Exiting...\n");
+                exit(17);
+        }
+        sleep(3);
+
+        /* ---- */
+        //show_pstree(pidB);
+        pidB=wait(&statusB);
+        explain_wait_status(pidB,statusB);
+        //printf("\n");
+        //show_pstree(pidC);
+        pidC = wait(&statusC);
+        explain_wait_status(pidC, statusC);
+
+        sleep(4);
+        printf("A: Exiting...\n");
+        exit(16);
+}
+
+/*
+ * The initial process forks the root of the process tree,
+ * waits for the process tree to be completely created,
+ * then takes a photo of it using show_pstree().
+ *
+ * How to wait for the process tree to be ready?
+ * In ask2-{fork, tree}:
+ *      wait for a few seconds, hope for the best.
+ * In ask2-signals:
+ *      use wait_for_ready_children() to wait until
+ *      the first process raises SIGSTOP.
+ */
+int main(void)
+{
+        pid_t pid;
+        int status;
+
+        /* Fork root of process tree */
+        pid = fork();
+        if (pid < 0) {
+                perror("main: fork");
+                exit(1);
+        }
+        if (pid == 0) {
+                /* Child */
+                fork_procs();
+                exit(1);
+        }
+        /*
+         * Father
+         */
+        /* for ask2-signals */
+        /* wait_for_ready_children(1); */
+
+        /* for ask2-{fork, tree} */
+        sleep(12);
+        /* Print the process tree root at pid */
+        show_pstree(pid);
+//      printf("@10@\n");
+//      fflush(stdout);
+        /* for ask2-signals */
+        /* kill(pid, SIGCONT); */
+
+        /* Wait for the root of the process tree to terminate */
+        pid = wait(&status);
+        explain_wait_status(pid, status);
+
+        return 0;
+}
